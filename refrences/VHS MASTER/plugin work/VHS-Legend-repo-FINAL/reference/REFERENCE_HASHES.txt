@@ -1,0 +1,2 @@
+WORKING DITHER.aex / VHS LEGEND.aex are extracted from uploaded plugins(1).zip.
+forgeVkLoader.dll SHA-256: bdce9df852eb57420dac319be91bb1dac87afc87d852cb44c0dfaf7543b54f7b

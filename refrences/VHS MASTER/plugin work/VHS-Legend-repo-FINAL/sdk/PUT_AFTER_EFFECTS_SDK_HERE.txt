@@ -1,0 +1,1 @@
+Put your licensed Adobe After Effects SDK here. Do not commit the SDK to a public repository. Configure AE_SDK_ROOT to this folder.

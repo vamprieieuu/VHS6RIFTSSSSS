@@ -1,0 +1,4 @@
+/app/applet/build-win/CMakeFiles/VHS6RIFT_PiPL.dir
+/app/applet/build-win/CMakeFiles/VHS6RIFT.dir
+/app/applet/build-win/CMakeFiles/edit_cache.dir
+/app/applet/build-win/CMakeFiles/rebuild_cache.dir

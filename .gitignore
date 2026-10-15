@@ -1,0 +1,14 @@
+/build/
+/out/
+/artifacts/
+*.aex
+*.dll
+*.obj
+*.pdb
+*.ilk
+*.res
+*.rr
+*.rrc
+*.log
+.vs/
+.vscode/
