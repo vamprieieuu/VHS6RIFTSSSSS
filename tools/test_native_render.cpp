@@ -1,3 +1,9 @@
+#ifndef _STANDALONE_TEST_HARNESS_
+#define _STANDALONE_TEST_HARNESS_
+#endif
+
+#include <stdint.h>
+#include <stddef.h>
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -5,6 +11,11 @@
 #include <iomanip>
 #include <functional>
 #include <algorithm>
+#include <cstdio>
+
+#ifndef DllExport
+#define DllExport
+#endif
 
 #ifndef TRUE
 #define TRUE 1
@@ -15,6 +26,7 @@
 
 typedef unsigned char A_u_char;
 typedef unsigned short A_u_short;
+typedef unsigned int A_u_long;
 typedef int A_long;
 typedef short A_short;
 typedef double PF_FpLong;
@@ -32,11 +44,12 @@ typedef int PF_ParamValue;
 
 #define PF_Err_NONE 0
 #define PF_Err_OUT_OF_MEMORY 1
-#define DllExport
 
 typedef struct {
 	A_u_char alpha, red, green, blue;
 } PF_Pixel8;
+
+typedef PF_Pixel8 PF_Pixel;
 
 typedef struct {
 	int width;
@@ -45,9 +58,13 @@ typedef struct {
 	void *data;
 } PF_LayerDef;
 
+typedef PF_LayerDef PF_EffectWorld;
+
 typedef struct {
 	int time_scale;
 	int current_time;
+	int time_step;
+	PF_LayerDef src_snd;
 } PF_InData;
 
 typedef struct {
@@ -56,6 +73,7 @@ typedef struct {
 	int out_flags2;
 	int num_params;
 	char return_msg[512];
+	PF_LayerDef dest_snd;
 } PF_OutData;
 
 typedef struct {
@@ -63,6 +81,7 @@ typedef struct {
 		struct { int value; } bd;
 		struct { double value; } fs_d;
 		struct { int value; } pd;
+		struct { int value; } sd;
 		PF_LayerDef ld;
 	} u;
 } PF_ParamDef;
@@ -79,22 +98,26 @@ typedef int PF_Cmd;
 typedef struct {
 	void *dataP;
 	int num_samples;
-	struct { int num_channels; } fi;
+	struct { float rateF; int num_channels; } fi;
 } PF_SoundWorld;
 
-// Stub out AFX and AE_Effect.h macros for standalone testing
-#define _H_AEConfig
-#define _H_AE_Effect
-#define _H_AE_EffectCB
+#define PF_CHECKOUT_PARAM(in_data, index, time, time_step, time_scale, param_def) PF_Err_NONE
+#define PF_CHECKIN_PARAM(in_data, param_def) PF_Err_NONE
+
 #define PF_SPRINTF(...) (0)
 #define AEFX_CLR_STRUCT(s) memset(&(s), 0, sizeof(s))
 #define PF_ADD_PARAM(in_data, id, def) PF_Err_NONE
 #define PF_ADD_TOPIC(NAME, ID) PF_Err_NONE
 #define PF_END_TOPIC(ID) PF_Err_NONE
+#define PF_ADD_SLIDER(NAME, V_MIN, V_MAX, S_MIN, S_MAX, DFLT, ID) PF_Err_NONE
+#define PF_ADD_FLOAT_SLIDER(NAME, V_MIN, V_MAX, S_MIN, S_MAX, DFLT, PREC, ID) PF_Err_NONE
 #define PF_ADD_FLOAT_SLIDERX(NAME, V_MIN, V_MAX, S_MIN, S_MAX, DFLT, PREC, DISP, FLAGS, ID) PF_Err_NONE
-#define PF_ADD_CHECKBOXX(NAME, DESC, DFLT, FLAGS, ID) PF_Err_NONE
+#define PF_ADD_CHECKBOX(NAME, DESC, DFLT, FLAGS, ID) PF_Err_NONE
 #define PF_ADD_POPUP(NAME, NUM, DFLT, CHOICES, ID) PF_Err_NONE
 #define PF_ADD_LAYER(NAME, DFLT, ID) PF_Err_NONE
+#define PF_LayerDefault_NONE 0
+#define PF_Precision_TENTHS 1
+#define PF_Precision_HUNDREDTHS 2
 #define PF_VERSION(maj, min, bug, stage, build) 557057
 #define PF_Stage_DEVELOP 0
 #define PF_Stage_RELEASE 3
@@ -109,238 +132,253 @@ typedef struct {
 #include "VHS6RIFT.h"
 #include "../src/VHS6RIFT.cpp"
 
-struct PixelStats {
-	size_t changedPixels;
-	double meanAbsError;
-	int minR, maxR;
-	int minG, maxG;
-	int minB, maxB;
-};
-
-static PixelStats CompareImages(const PF_Pixel8 *src, const PF_Pixel8 *dst, int width, int height) {
-	PixelStats stats = {0, 0.0, 255, 0, 255, 0, 255, 0};
-	size_t total = width * height;
-	double totalDiff = 0.0;
-
-	for (size_t i = 0; i < total; ++i) {
-		int dr = std::abs((int)dst[i].red - (int)src[i].red);
-		int dg = std::abs((int)dst[i].green - (int)src[i].green);
-		int db = std::abs((int)dst[i].blue - (int)src[i].blue);
-
-		if (dr > 0 || dg > 0 || db > 0) {
-			stats.changedPixels++;
-		}
-		totalDiff += (dr + dg + db) / 3.0;
-
-		stats.minR = std::min(stats.minR, (int)dst[i].red);
-		stats.maxR = std::max(stats.maxR, (int)dst[i].red);
-		stats.minG = std::min(stats.minG, (int)dst[i].green);
-		stats.maxG = std::max(stats.maxG, (int)dst[i].green);
-		stats.minB = std::min(stats.minB, (int)dst[i].blue);
-		stats.maxB = std::max(stats.maxB, (int)dst[i].blue);
+static void SavePPM(const char *filename, const PF_Pixel *buffer, int w, int h) {
+	FILE *f = fopen(filename, "wb");
+	if (!f) return;
+	fprintf(f, "P6\n%d %d\n255\n", w, h);
+	for (int i = 0; i < w * h; ++i) {
+		fputc(buffer[i].red, f);
+		fputc(buffer[i].green, f);
+		fputc(buffer[i].blue, f);
 	}
-
-	stats.meanAbsError = totalDiff / (double)total;
-	return stats;
+	fclose(f);
 }
 
 int main() {
 	std::cout << "======================================================================\n";
-	std::cout << "VHS6RIFT Production Native C++ Render Pipeline Test Suite\n";
+	std::cout << "VHS Master Native C++ Rendering Engine Preview Generator\n";
 	std::cout << "======================================================================\n\n";
 
-	const int width = 256;
-	const int height = 256;
+	const int width = 640;
+	const int height = 480;
 	const size_t numPixels = width * height;
 
-	// Prepare mock InData & OutData
 	PF_InData in_data;
 	memset(&in_data, 0, sizeof(in_data));
 	in_data.time_scale = 30000;
-	in_data.current_time = 0;
+	in_data.current_time = 15000; // 0.5s into composition
 
 	PF_OutData out_data;
 	memset(&out_data, 0, sizeof(out_data));
 
-	// Allocate and setup parameters array
-	std::vector<PF_ParamDef> param_defs(VHS6RIFT_NUM_PARAMS);
-	std::vector<PF_ParamDef*> params(VHS6RIFT_NUM_PARAMS);
-	for (size_t i = 0; i < VHS6RIFT_NUM_PARAMS; ++i) {
+	std::vector<PF_ParamDef> param_defs(VHS_NUM_PARAMS);
+	std::vector<PF_ParamDef*> params(VHS_NUM_PARAMS);
+	for (size_t i = 0; i < VHS_NUM_PARAMS; ++i) {
 		memset(&param_defs[i], 0, sizeof(PF_ParamDef));
 		params[i] = &param_defs[i];
 	}
 
-	// Set default parameter values for test suite matching ParamsSetup
-	params[VHS6RIFT_MAIN_ENABLE]->u.bd.value = TRUE;
-	params[VHS6RIFT_MASTER_STRENGTH]->u.fs_d.value = 100.0;
-	params[VHS6RIFT_SIGNAL_DEGRADATION]->u.fs_d.value = 30.0;
-	params[VHS6RIFT_LUMA_SOFTNESS]->u.fs_d.value = 25.0;
-	params[VHS6RIFT_CHROMA_DEGRADATION]->u.fs_d.value = 30.0;
-	params[VHS6RIFT_CHROMA_BLEED]->u.fs_d.value = 35.0;
-	params[VHS6RIFT_CHROMA_OFFSET_X]->u.fs_d.value = 3.0;
-	params[VHS6RIFT_CHROMA_OFFSET_Y]->u.fs_d.value = 0.0;
-	params[VHS6RIFT_EDGE_RESPONSE]->u.fs_d.value = 25.0;
-	params[VHS6RIFT_CONTRAST]->u.fs_d.value = 8.0;
-	params[VHS6RIFT_SATURATION]->u.fs_d.value = -10.0;
-	params[VHS6RIFT_BLACK_LEVEL]->u.fs_d.value = 4.0;
-	params[VHS6RIFT_ANALOG_COLOR_SHIFT]->u.fs_d.value = 0.0;
-	params[VHS6RIFT_SIGNAL_INSTABILITY]->u.fs_d.value = 20.0;
-	params[VHS6RIFT_IMAGE_WARPING]->u.fs_d.value = 15.0;
-	params[VHS6RIFT_GLOBAL_SEED]->u.fs_d.value = 1337.0;
-
-	// Create synthetic source image buffer (radial color gradient)
-	std::vector<PF_Pixel8> src_buffer(numPixels);
+	// Create synthetic test input image (Color bars & gradient)
+	std::vector<PF_Pixel> src_buffer(numPixels);
+	int barWidth = width / 8;
+	PF_Pixel colors[8] = {
+		{255, 255, 255, 255}, {255, 255, 255, 0}, {255, 0, 255, 255}, {255, 0, 255, 0},
+		{255, 255, 0, 255}, {255, 255, 0, 0}, {255, 0, 0, 255}, {255, 0, 0, 0}
+	};
 	for (int y = 0; y < height; ++y) {
 		for (int x = 0; x < width; ++x) {
 			size_t idx = y * width + x;
-			src_buffer[idx].red   = (A_u_char)(x * 255 / width);
-			src_buffer[idx].green = (A_u_char)(y * 255 / height);
-			src_buffer[idx].blue  = (A_u_char)((x + y) * 255 / (width + height));
-			src_buffer[idx].alpha = 255;
+			if (y < height / 2) {
+				int barIdx = std::min(7, x / barWidth);
+				src_buffer[idx] = colors[barIdx];
+			} else {
+				src_buffer[idx].alpha = 255;
+				src_buffer[idx].red   = (A_u_char)(x * 255 / width);
+				src_buffer[idx].green = (A_u_char)((y - height / 2) * 255 / (height / 2));
+				src_buffer[idx].blue  = (A_u_char)((width - x) * 255 / width);
+			}
 		}
 	}
 
-	// Setup Input LayerDef in params[0]
-	PF_LayerDef input_layer;
+	SavePPM("previews/original.ppm", src_buffer.data(), width, height);
+
+	PF_EffectWorld input_layer;
 	memset(&input_layer, 0, sizeof(input_layer));
 	input_layer.width = width;
 	input_layer.height = height;
-	input_layer.rowbytes = width * sizeof(PF_Pixel8);
+	input_layer.rowbytes = width * sizeof(PF_Pixel);
 	input_layer.data = src_buffer.data();
-	params[VHS6RIFT_INPUT]->u.ld = input_layer;
+	params[VHS_INPUT]->u.ld = input_layer;
 
-	// Setup Output LayerDef
-	std::vector<PF_Pixel8> dst_buffer(numPixels);
-	PF_LayerDef output_layer;
+	std::vector<PF_Pixel> dst_buffer(numPixels);
+	PF_EffectWorld output_layer;
 	memset(&output_layer, 0, sizeof(output_layer));
 	output_layer.width = width;
 	output_layer.height = height;
-	output_layer.rowbytes = width * sizeof(PF_Pixel8);
+	output_layer.rowbytes = width * sizeof(PF_Pixel);
 	output_layer.data = dst_buffer.data();
 
-	int passedTests = 0;
-	int totalTests = 0;
+	auto SetDefaultParameters = [&]() {
+		params[VHS_MASTER_STRENGTH]->u.fs_d.value = 350.0;
+		params[VHS_GLOBAL_ANIM_SPEED]->u.fs_d.value = 100.0;
+		params[VHS_GLOBAL_SEED]->u.sd.value = 17;
 
-	// Test 1: Diagnostic Mode (Solid Magenta Verification)
-	{
-		totalTests++;
-		params[VHS6RIFT_DIAGNOSTIC_MODE]->u.bd.value = TRUE;
-		memset(dst_buffer.data(), 0, dst_buffer.size() * sizeof(PF_Pixel8));
+		params[VHS_CAM_PROFILE]->u.pd.value = 1;
+		params[VHS_CAM_STRENGTH]->u.fs_d.value = 100.0;
+		params[VHS_CAM_EXPOSURE]->u.fs_d.value = 0.0;
+		params[VHS_CAM_HIGHLIGHT_ROLLOFF]->u.fs_d.value = 50.0;
+		params[VHS_CAM_SHADOW_LIFT]->u.fs_d.value = 10.0;
+		params[VHS_CAM_COLOR_SAT]->u.fs_d.value = 100.0;
+		params[VHS_CAM_WB_TEMP]->u.fs_d.value = 0.0;
+		params[VHS_CAM_WB_TINT]->u.fs_d.value = 0.0;
+		params[VHS_CAM_OPTICAL_SOFTNESS]->u.fs_d.value = 20.0;
+		params[VHS_CAM_SHARPNESS]->u.fs_d.value = 30.0;
+		params[VHS_CAM_LUMA_BANDWIDTH]->u.fs_d.value = 80.0;
+		params[VHS_CAM_CHROMA_BANDWIDTH]->u.fs_d.value = 60.0;
+		params[VHS_CAM_CHROMA_BLEED]->u.fs_d.value = 40.0;
+		params[VHS_CAM_LOWLIGHT_NOISE]->u.fs_d.value = 15.0;
+		params[VHS_CAM_FORMAT_RESP]->u.fs_d.value = 50.0;
 
-		EffectMain(PF_Cmd_RENDER, &in_data, &out_data, params.data(), &output_layer, nullptr);
-		PixelStats stats = CompareImages(src_buffer.data(), dst_buffer.data(), width, height);
+		params[VHS_TAPE_MODE]->u.pd.value = 1;
+		params[VHS_TAPE_STRENGTH]->u.fs_d.value = 50.0;
+		params[VHS_TAPE_BAND_SIZE]->u.fs_d.value = 20.0;
+		params[VHS_TAPE_SPEED]->u.fs_d.value = 60.0;
+		params[VHS_TAPE_JITTER]->u.fs_d.value = 25.0;
+		params[VHS_TAPE_DROPOUT_DENSITY]->u.fs_d.value = 15.0;
+		params[VHS_TAPE_WRINKLE_AMOUNT]->u.fs_d.value = 10.0;
+		params[VHS_TAPE_CHROMA_DEFORMATION]->u.fs_d.value = 30.0;
 
-		bool isAllMagenta = true;
-		for (size_t i = 0; i < numPixels; ++i) {
-			if (dst_buffer[i].red != 255 || dst_buffer[i].green != 0 || dst_buffer[i].blue != 255) {
-				isAllMagenta = false;
-				break;
-			}
-		}
+		params[VHS_GLITCH_ENABLE]->u.bd.value = FALSE;
+		params[VHS_GLITCH_FREQ]->u.fs_d.value = 30.0;
+		params[VHS_GLITCH_DURATION]->u.fs_d.value = 0.20;
+		params[VHS_GLITCH_INTENSITY]->u.fs_d.value = 60.0;
+		params[VHS_GLITCH_VARIATION]->u.fs_d.value = 40.0;
+		params[VHS_GLITCH_RECOVERY]->u.fs_d.value = 0.15;
+		params[VHS_GLITCH_TEARING]->u.fs_d.value = 50.0;
+		params[VHS_GLITCH_BAND_DISRUPT]->u.fs_d.value = 35.0;
+		params[VHS_GLITCH_TRACKING_FAIL]->u.fs_d.value = 25.0;
+		params[VHS_GLITCH_CHROMA_INSTAB]->u.fs_d.value = 45.0;
+		params[VHS_GLITCH_BURST_FLICKER]->u.fs_d.value = 20.0;
+		params[VHS_GLITCH_SPEED]->u.fs_d.value = 100.0;
+		params[VHS_GLITCH_SEED]->u.sd.value = 1337;
 
-		if (isAllMagenta && stats.changedPixels == numPixels) {
-			std::cout << "  [PASS] Test 1: Diagnostic Mode (Outputs 100% Solid Magenta RGB: 255,0,255).\n";
-			passedTests++;
-		} else {
-			std::cout << "  [FAIL] Test 1: Diagnostic Mode failed.\n";
-		}
+		params[VHS_FILTER_PRESET]->u.pd.value = 1; // Off
+		params[VHS_FILTER_INTENSITY]->u.fs_d.value = 35.0;
+		params[VHS_FILTER_WARMTH]->u.fs_d.value = 25.0;
+		params[VHS_FILTER_GHOSTING]->u.fs_d.value = 20.0;
+		params[VHS_FILTER_RINGING]->u.fs_d.value = 18.0;
+		params[VHS_FILTER_BLACK_CRUSH]->u.fs_d.value = 15.0;
 
-		// Turn off diagnostic mode
-		params[VHS6RIFT_DIAGNOSTIC_MODE]->u.bd.value = FALSE;
-	}
+		params[VHS_GRAIN_ENABLE]->u.bd.value = FALSE;
+		params[VHS_GRAIN_MODE]->u.pd.value = 1;
+		params[VHS_GRAIN_AMOUNT]->u.fs_d.value = 25.0;
+		params[VHS_GRAIN_LUMA_INTENSITY]->u.fs_d.value = 20.0;
+		params[VHS_GRAIN_CHROMA_INTENSITY]->u.fs_d.value = 25.0;
+		params[VHS_GRAIN_SIZE]->u.fs_d.value = 25.0;
+		params[VHS_GRAIN_SOFTNESS]->u.fs_d.value = 30.0;
+		params[VHS_GRAIN_SHADOW_RESP]->u.fs_d.value = 40.0;
+		params[VHS_GRAIN_MIDTONE_RESP]->u.fs_d.value = 30.0;
+		params[VHS_GRAIN_HIGHLIGHT_RESP]->u.fs_d.value = 15.0;
+		params[VHS_GRAIN_MOTION_SPEED]->u.fs_d.value = 100.0;
+		params[VHS_GRAIN_SEED]->u.sd.value = 42;
 
-	// Helper test runner lambda
-	auto RunTestCase = [&](const std::string &name, std::function<void()> setupFn) {
-		totalTests++;
-		// Reset all enable checkboxes to FALSE
-		params[VHS6RIFT_MAIN_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_TAPE_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_TRACKING_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_GRAIN_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_CRT_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_CAMERA_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_MODEL_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_MODES_ENABLE]->u.bd.value = FALSE;
-		params[VHS6RIFT_OTHER_ENABLE]->u.bd.value = FALSE;
+		params[VHS_TEXT_ENABLE]->u.bd.value = FALSE;
+		params[VHS_TEXT_STYLE]->u.pd.value = 1;
+		params[VHS_TEXT_YEAR]->u.sd.value = 1994;
+		params[VHS_TEXT_MONTH]->u.sd.value = 5;
+		params[VHS_TEXT_DAY]->u.sd.value = 18;
+		params[VHS_TEXT_HOUR]->u.sd.value = 12;
+		params[VHS_TEXT_MINUTE]->u.sd.value = 34;
+		params[VHS_TEXT_PRESET_STRING]->u.pd.value = 1;
+		params[VHS_TEXT_POS_X]->u.fs_d.value = 8.0;
+		params[VHS_TEXT_POS_Y]->u.fs_d.value = 88.0;
+		params[VHS_TEXT_SCALE]->u.fs_d.value = 100.0;
+		params[VHS_TEXT_OPACITY]->u.fs_d.value = 90.0;
+	};
+
+	auto RenderMode = [&](const char *outPpm, std::function<void()> setupFn) {
+		SetDefaultParameters();
+		params[VHS_INPUT]->u.ld = input_layer;
 
 		setupFn();
 
-		memset(dst_buffer.data(), 0, dst_buffer.size() * sizeof(PF_Pixel8));
+		memset(dst_buffer.data(), 0, dst_buffer.size() * sizeof(PF_Pixel));
 		EffectMain(PF_Cmd_RENDER, &in_data, &out_data, params.data(), &output_layer, nullptr);
-
-		PixelStats stats = CompareImages(src_buffer.data(), dst_buffer.data(), width, height);
-
-		std::cout << "  " << std::left << std::setw(38) << name
-		          << " -> Changed: " << std::setw(6) << stats.changedPixels << "/" << numPixels
-		          << " | MAE: " << std::fixed << std::setprecision(2) << std::setw(5) << stats.meanAbsError
-		          << " | Output Range R:[" << std::setw(3) << stats.minR << ".." << std::setw(3) << stats.maxR << "]"
-		          << " G:[" << std::setw(3) << stats.minG << ".." << std::setw(3) << stats.maxG << "]"
-		          << " B:[" << std::setw(3) << stats.minB << ".." << std::setw(3) << stats.maxB << "]\n";
-
-		if (stats.changedPixels > 0 && stats.meanAbsError > 0.1) {
-			passedTests++;
-		} else {
-			std::cout << "    [FAIL] No pixels changed or MAE zero!\n";
-		}
+		SavePPM(outPpm, dst_buffer.data(), width, height);
+		std::cout << "Rendered native C++ preview: " << outPpm << "\n";
 	};
 
-	std::cout << "\n--- Production Render Pass Individual Module Tests ---\n";
-
-	RunTestCase("Test 2: Main VHS Engine (Default)", [&]() {
-		params[VHS6RIFT_MAIN_ENABLE]->u.bd.value = TRUE;
+	RenderMode("previews/camera_fxc6.ppm", [&]() {
+		params[VHS_CAM_PROFILE]->u.pd.value = 1;
+		params[VHS_CAM_STRENGTH]->u.fs_d.value = 100.0;
+		params[VHS_CAM_EXPOSURE]->u.fs_d.value = 10.0;
 	});
 
-	RunTestCase("Test 3: Signal Instability", [&]() {
-		params[VHS6RIFT_MAIN_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_SIGNAL_INSTABILITY]->u.fs_d.value = 50.0;
+	RenderMode("previews/camera_gen7.ppm", [&]() {
+		params[VHS_CAM_PROFILE]->u.pd.value = 2;
+		params[VHS_CAM_STRENGTH]->u.fs_d.value = 100.0;
+		params[VHS_CAM_SHADOW_LIFT]->u.fs_d.value = 30.0;
 	});
 
-	RunTestCase("Test 4: Image Warping", [&]() {
-		params[VHS6RIFT_MAIN_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_IMAGE_WARPING]->u.fs_d.value = 50.0;
+	RenderMode("previews/camera_jvc_c7u.ppm", [&]() {
+		params[VHS_CAM_PROFILE]->u.pd.value = 3;
+		params[VHS_CAM_STRENGTH]->u.fs_d.value = 100.0;
+		params[VHS_CAM_HIGHLIGHT_ROLLOFF]->u.fs_d.value = 80.0;
 	});
 
-	RunTestCase("Test 5: Tape Effects (Tape Band)", [&]() {
-		params[VHS6RIFT_TAPE_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_TAPE_TYPE]->u.pd.value = 2; // Horizontal Tape Band
-		params[VHS6RIFT_TAPE_STRENGTH]->u.fs_d.value = 80.0;
-		params[VHS6RIFT_TAPE_WIDTH]->u.fs_d.value = 40.0;
+	RenderMode("previews/vhs_sp_mode.ppm", [&]() {
+		params[VHS_TAPE_MODE]->u.pd.value = 1;
+		params[VHS_TAPE_STRENGTH]->u.fs_d.value = 80.0;
+		params[VHS_TAPE_JITTER]->u.fs_d.value = 40.0;
+		params[VHS_CAM_CHROMA_BLEED]->u.fs_d.value = 60.0;
 	});
 
-	RunTestCase("Test 6: Tracking Damage (uni.vhs)", [&]() {
-		params[VHS6RIFT_TRACKING_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_TRACKING_BAND_STRENGTH]->u.fs_d.value = 50.0;
-		params[VHS6RIFT_TRACKING_HEAD_SWITCHING]->u.fs_d.value = 50.0;
+	RenderMode("previews/vhs_lp_mode.ppm", [&]() {
+		params[VHS_TAPE_MODE]->u.pd.value = 2;
+		params[VHS_TAPE_STRENGTH]->u.fs_d.value = 100.0;
+		params[VHS_TAPE_JITTER]->u.fs_d.value = 80.0;
+		params[VHS_TAPE_BAND_SIZE]->u.fs_d.value = 40.0;
+		params[VHS_TAPE_DROPOUT_DENSITY]->u.fs_d.value = 50.0;
 	});
 
-	RunTestCase("Test 7: CRT TV Engine", [&]() {
-		params[VHS6RIFT_CRT_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_CRT_SCANLINE_STRENGTH]->u.fs_d.value = 40.0;
-		params[VHS6RIFT_CRT_CURVATURE]->u.fs_d.value = 20.0;
+	RenderMode("previews/bad_signal_glitch.ppm", [&]() {
+		params[VHS_GLITCH_ENABLE]->u.bd.value = TRUE;
+		params[VHS_GLITCH_FREQ]->u.fs_d.value = 100.0;
+		params[VHS_GLITCH_DURATION]->u.fs_d.value = 1.0;
+		params[VHS_GLITCH_INTENSITY]->u.fs_d.value = 100.0;
+		params[VHS_GLITCH_TEARING]->u.fs_d.value = 90.0;
+		params[VHS_GLITCH_BAND_DISRUPT]->u.fs_d.value = 80.0;
 	});
 
-	RunTestCase("Test 8: Camera Profile (Handycam)", [&]() {
-		params[VHS6RIFT_CAMERA_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_CAMERA_PROFILE]->u.pd.value = 4; // Sony Handycam
-		params[VHS6RIFT_CAMERA_STRENGTH]->u.fs_d.value = 100.0;
+	RenderMode("previews/crt_tv_trinitron.ppm", [&]() {
+		params[VHS_FILTER_PRESET]->u.pd.value = 2;
+		params[VHS_FILTER_INTENSITY]->u.fs_d.value = 60.0;
+		params[VHS_FILTER_WARMTH]->u.fs_d.value = 40.0;
+		params[VHS_FILTER_GHOSTING]->u.fs_d.value = 35.0;
+		params[VHS_FILTER_RINGING]->u.fs_d.value = 30.0;
 	});
 
-	RunTestCase("Test 9: Reference Model 1", [&]() {
-		params[VHS6RIFT_MODEL_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_MODEL_SELECTOR]->u.pd.value = 1; // Model 1
-		params[VHS6RIFT_MODEL_INTENSITY]->u.fs_d.value = 80.0;
-		params[VHS6RIFT_MODEL_BLEND]->u.fs_d.value = 100.0;
+	RenderMode("previews/grain_color.ppm", [&]() {
+		params[VHS_GRAIN_ENABLE]->u.bd.value = TRUE;
+		params[VHS_GRAIN_MODE]->u.pd.value = 2;
+		params[VHS_GRAIN_AMOUNT]->u.fs_d.value = 80.0;
+		params[VHS_GRAIN_SIZE]->u.fs_d.value = 25.0;
+		params[VHS_GRAIN_SHADOW_RESP]->u.fs_d.value = 60.0;
 	});
 
-	RunTestCase("Test 10: Additional VHS Mode (NTSC-RS)", [&]() {
-		params[VHS6RIFT_MODES_ENABLE]->u.bd.value = TRUE;
-		params[VHS6RIFT_MODES_SELECTOR]->u.pd.value = 5; // NTSC-RS
-		params[VHS6RIFT_MODES_DRIVE]->u.fs_d.value = 50.0;
+	RenderMode("previews/date_text_osd.ppm", [&]() {
+		params[VHS_TEXT_ENABLE]->u.bd.value = TRUE;
+		params[VHS_TEXT_STYLE]->u.pd.value = 2;
+		params[VHS_TEXT_YEAR]->u.sd.value = 1994;
+		params[VHS_TEXT_MONTH]->u.sd.value = 5;
+		params[VHS_TEXT_DAY]->u.sd.value = 18;
+		params[VHS_TEXT_HOUR]->u.sd.value = 12;
+		params[VHS_TEXT_MINUTE]->u.sd.value = 34;
+		params[VHS_TEXT_SCALE]->u.fs_d.value = 120.0;
+		params[VHS_TEXT_OPACITY]->u.fs_d.value = 100.0;
 	});
 
-	std::cout << "\n======================================================================\n";
-	std::cout << "Summary: " << passedTests << " / " << totalTests << " tests PASSED.\n";
-	std::cout << "======================================================================\n";
+	RenderMode("previews/vhs_master_full_suite.ppm", [&]() {
+		params[VHS_CAM_PROFILE]->u.pd.value = 3;
+		params[VHS_TAPE_MODE]->u.pd.value = 1;
+		params[VHS_GLITCH_ENABLE]->u.bd.value = TRUE;
+		params[VHS_GLITCH_INTENSITY]->u.fs_d.value = 80.0;
+		params[VHS_FILTER_PRESET]->u.pd.value = 2;
+		params[VHS_GRAIN_ENABLE]->u.bd.value = TRUE;
+		params[VHS_GRAIN_AMOUNT]->u.fs_d.value = 40.0;
+		params[VHS_TEXT_ENABLE]->u.bd.value = TRUE;
+		params[VHS_TEXT_STYLE]->u.pd.value = 2;
+	});
 
-	return (passedTests == totalTests) ? 0 : 1;
+	return 0;
 }
