@@ -50,7 +50,7 @@ enum {
   P_TAPE_SWEEP_ENABLE, P_TAPE_SWEEP_STRENGTH, P_TAPE_SWEEP_WIDTH, P_TAPE_SWEEP_SPEED, P_TAPE_SWEEP_INTERVAL, P_TOPIC_ADV_TAPE_END,
   P_COUNT
 };
-static PF_Err About(PF_OutData *out_data) {
+static PF_Err About(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_LayerDef *output) {
   PF_SPRINTF(out_data->return_msg, "%s 1.2 | Native VHS video processing for After Effects 23.x", PLUGIN_NAME);
   return PF_Err_NONE;
 }
@@ -887,7 +887,7 @@ static PF_Err AudioRender(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef 
 extern "C" DllExport PF_Err EffectMain(PF_Cmd cmd, PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *params[], PF_LayerDef *output, void *) {
   PF_Err err = PF_Err_NONE;
   switch (cmd) {
-    case PF_Cmd_ABOUT: err = About(out_data); break;
+    case PF_Cmd_ABOUT: err = About(in_data, out_data, params, output); break;
     case PF_Cmd_GLOBAL_SETUP: err = GlobalSetup(out_data); break;
     case PF_Cmd_PARAMS_SETUP: err = ParamsSetup(in_data, out_data); break;
     case PF_Cmd_RENDER: err = Render(in_data, params, output); break;
