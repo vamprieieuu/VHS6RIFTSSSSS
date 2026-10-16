@@ -48,7 +48,7 @@ add_custom_target(VHS6RIFT_PiPL DEPENDS "${PIPL_RC}")
 
 add_library(VHS6RIFT MODULE src/VHS6RIFT.cpp "${PIPL_RC}")
 add_dependencies(VHS6RIFT VHS6RIFT_PiPL)
-target_include_directories(VHS6RIFT PRIVATE "${AE_HEADERS}" "${AE_SP_HEADERS}" "${AE_INCLUDE_ROOT}/Util" "${AE_INCLUDE_ROOT}/Examples/Headers" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(VHS6RIFT PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${AE_HEADERS}" "${AE_SP_HEADERS}" "${AE_INCLUDE_ROOT}/Util" "${AE_INCLUDE_ROOT}/Examples/Headers")
 target_compile_features(VHS6RIFT PRIVATE cxx_std_17)
 target_compile_definitions(VHS6RIFT PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(VHS6RIFT PRIVATE /EHsc /W3 /permissive-)
