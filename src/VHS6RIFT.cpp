@@ -57,7 +57,7 @@ static PF_Err About(PF_InData *in_data, PF_OutData *out_data, PF_ParamDef *param
 
 static PF_Err GlobalSetup(PF_OutData *out_data) {
   out_data->my_version = PF_VERSION(1, 2, 0, PF_Stage_RELEASE, 1);
-  out_data->out_flags = PF_OutFlag_AUDIO_EFFECT_TOO | PF_OutFlag_AUDIO_FLOAT_ONLY;
+  out_data->out_flags = PF_OutFlag_WIDE_TIME_INPUT | PF_OutFlag_NON_PARAM_VARY | PF_OutFlag_AUDIO_EFFECT_TOO | PF_OutFlag_AUDIO_FLOAT_ONLY;
   out_data->out_flags2 = 0;
   return PF_Err_NONE;
 }
@@ -460,22 +460,18 @@ static PF_Err Render(PF_InData *in_data, PF_ParamDef *params[], PF_LayerDef *out
   const float strength = std::min(20.0f, std::max(0.0f, s.master));
 
   // Camera models change the processing path, not merely a LUT.
-  static const float cameraSat[7] = {0.88f,1.10f,0.92f,0.82f,0.72f,0.96f,0.90f};
-  static const float cameraSoft[7] = {0.18f,0.10f,0.08f,0.22f,0.28f,0.06f,0.14f};
-  static const float cameraBleed[7] = {0.28f,0.18f,0.24f,0.34f,0.42f,0.12f,0.26f};
-  static const float cameraNoise[7] = {0.08f,0.06f,0.10f,0.12f,0.15f,0.04f,0.09f};
-  // Reference-guided camera response coefficients. These are deliberate distinct image
-  // signatures, not exposure-only presets; exact calibration would require measured charts.
-  static const float cameraWarm[7] = {0.035f,-0.012f,0.018f,0.045f,0.055f,-0.018f,0.008f};
-  static const float cameraGreen[7] = {0.004f,0.018f,-0.006f,0.012f,-0.015f,0.008f,-0.010f};
-  static const float cameraContrast[7] = {0.96f,1.04f,1.02f,0.92f,0.88f,1.07f,0.99f};
-  static const float cameraHighlight[7] = {0.16f,0.08f,0.12f,0.22f,0.27f,0.06f,0.14f};
-  // Channel response and gamma signatures add camera-specific color science beyond exposure.
-  // These are creative reference approximations, not measured sensor calibration data.
-  static const float cameraRGain[7] = {1.035f,0.985f,1.020f,1.045f,1.060f,0.975f,1.010f};
-  static const float cameraGGain[7] = {0.995f,1.020f,0.990f,1.010f,0.980f,1.015f,0.985f};
-  static const float cameraBGain[7] = {0.965f,1.025f,0.980f,0.935f,0.925f,1.035f,1.000f};
-  static const float cameraGamma[7] = {1.035f,0.965f,1.015f,1.055f,1.075f,0.955f,1.010f};
+  static const float cameraSat[7]       = {0.95f, 1.25f, 0.85f, 0.65f, 0.70f, 1.15f, 1.05f};
+  static const float cameraSoft[7]      = {0.02f, 0.01f, 0.04f, 0.01f, 0.05f, 0.00f, 0.01f};
+  static const float cameraBleed[7]     = {0.20f, 0.15f, 0.35f, 0.10f, 0.40f, 0.08f, 0.18f};
+  static const float cameraNoise[7]     = {0.06f, 0.04f, 0.12f, 0.18f, 0.15f, 0.03f, 0.07f};
+  static const float cameraWarm[7]      = {0.04f,-0.02f, 0.14f,-0.08f, 0.12f,-0.05f, 0.03f};
+  static const float cameraGreen[7]     = {0.01f, 0.02f,-0.04f, 0.06f,-0.02f, 0.05f,-0.02f};
+  static const float cameraContrast[7]  = {1.02f, 1.15f, 1.08f, 1.22f, 0.85f, 1.18f, 1.05f};
+  static const float cameraHighlight[7] = {0.12f, 0.06f, 0.25f, 0.05f, 0.30f, 0.04f, 0.10f};
+  static const float cameraRGain[7]     = {1.04f, 1.06f, 1.18f, 0.88f, 1.12f, 0.94f, 1.03f};
+  static const float cameraGGain[7]     = {1.00f, 0.98f, 0.94f, 1.04f, 0.98f, 1.08f, 0.98f};
+  static const float cameraBGain[7]     = {0.96f, 1.02f, 0.78f, 1.16f, 0.82f, 1.04f, 1.02f};
+  static const float cameraGamma[7]     = {1.02f, 0.94f, 1.08f, 0.90f, 1.15f, 0.96f, 1.00f};
   const int ci = clampi(s.camera - 1, 0, 6);
   static const int cameraParamIds[7][4] = {
     {P_FXC6_CHARACTER,P_FXC6_COLOR,P_FXC6_SIGNAL,P_FXC6_GRAIN},
@@ -492,14 +488,14 @@ static PF_Err Render(PF_InData *in_data, PF_ParamDef *params[], PF_LayerDef *out
   const float cameraGrain = getSlider(params,cameraParamIds[ci][3],100.0f);
   const float cameraDrive = 1.0f-std::exp(-strength*0.70f);
   const float sat = s.saturation * (0.65f + cameraSat[ci]*0.35f + (cameraColor-0.5f)*0.45f*cameraDrive*s.continuous);
-  const float soft = clamp01(std::max(s.softness, cameraSoft[ci]*cameraCharacter) * (0.25f+0.75f*clamp01(strength/4.0f)) * s.continuous);
+  const float soft = clamp01(s.softness * (0.25f+0.75f*clamp01(strength/4.0f)) * s.continuous + cameraSoft[ci]*(cameraCharacter*0.01f)*0.15f);
   const float bleed = clamp01(s.bleed * (0.55f + cameraBleed[ci]) * (0.2f+0.8f*clamp01(strength/4.0f)) * s.continuous);
-  const bool grainEnabled = getCheck(params, P_GRAIN_ENABLE);
-  const bool trackingEnabled = getCheck(params, P_TRACKING_ENABLE);
-  const bool tapeEnabled = getCheck(params, P_TAPE_ENABLE);
+  const bool grainEnabled = getCheck(params, P_GRAIN_ENABLE) || (s.grain > 0.001f);
+  const bool trackingEnabled = getCheck(params, P_TRACKING_ENABLE) || (s.tracking > 0.001f);
+  const bool tapeEnabled = getCheck(params, P_TAPE_ENABLE) || (s.tapeType > 0 && s.tapeStrength > 0.001f);
   const bool overlayEnabled = getCheck(params, P_OVERLAY_ENABLE);
-  const bool otherEnabled = getCheck(params, P_OTHER_ENABLE);
-  const bool crtEnabled = getCheck(params, P_CRT_ENABLE);
+  const bool otherEnabled = getCheck(params, P_OTHER_ENABLE) || (params[P_OTHER_ENGINE]->u.pd.value > 1 && getSlider(params, P_OTHER_STRENGTH, 100.0f) > 0.001f);
+  const bool crtEnabled = getCheck(params, P_CRT_ENABLE) || (getSlider(params, P_CRT_SCANLINES, 100.0f) > 0.001f || getSlider(params, P_CRT_CURVE, 100.0f) > 0.001f || getSlider(params, P_CRT_RGB, 100.0f) > 0.001f);
   const bool transparentTapeEnabled = getCheck(params,P_TRANSPARENT_TAPE_ENABLE);
   const bool tapeSweepEnabled = getCheck(params,P_TAPE_SWEEP_ENABLE);
   const float transparentTapeStrength = getSlider(params,P_TRANSPARENT_TAPE_STRENGTH,100.0f)*0.01f;
