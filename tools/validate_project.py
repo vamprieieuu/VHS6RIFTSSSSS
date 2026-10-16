@@ -73,7 +73,7 @@ if "AE_Effect_Global_OutFlags { 0x48000006 }" not in pipl:
     fail("PiPL global flags do not match the audio-capable source flags")
 if "PF_VERSION(1, 2, 0, PF_Stage_RELEASE, 1)" not in source:
     fail("compiled effect version is not the agreed 1.2 version")
-if "AE_Effect_Version { 559105 }" not in pipl:
+if "AE_Effect_Version { 591361 }" not in pipl:
     fail("PiPL version is not the agreed 1.2 version")
 if '#include "entry.h"' in source:
     fail("missing entry.h dependency remains; this SDK snapshot does not contain entry.h")
