@@ -6,8 +6,8 @@
 resource 'PiPL' (16000) {
   {
     Kind { AEEffect },
-    Name { "VHS6RIFT" },
-    Category { "VHS6RIFT" },
+    Name { "VHS Master" },
+    Category { "Video Effects" },
 #ifdef AE_OS_WIN
   #ifdef AE_PROC_INTELx64
     CodeWin64X86 { "EffectMain" },
@@ -24,7 +24,7 @@ resource 'PiPL' (16000) {
     AE_Effect_Info_Flags { 0 },
     AE_Effect_Global_OutFlags { 0x48000006 },
     AE_Effect_Global_OutFlags_2 { 0 },
-    AE_Effect_Match_Name { "com.vhs6rift.effect" },
+    AE_Effect_Match_Name { "com.vhsmaster.effect" },
     AE_Reserved_Info { 0 },
     AE_Effect_Support_URL { "https://github.com/" }
   }
