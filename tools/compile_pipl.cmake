@@ -7,13 +7,8 @@ foreach(required PIPL_TOOL CXX_COMPILER AE_HEADERS PIPL_R PIPL_RR PIPL_RRC PIPL_
   endif()
 endforeach()
 
-set(EXTRA_INCLUDES "")
-if(DEFINED AE_SP_HEADERS AND NOT "${AE_SP_HEADERS}" STREQUAL "")
-  set(EXTRA_INCLUDES "/I${AE_SP_HEADERS}")
-endif()
-
 execute_process(
-  COMMAND "${CXX_COMPILER}" "/I${AE_HEADERS}" ${EXTRA_INCLUDES} /EP "${PIPL_R}"
+  COMMAND "${CXX_COMPILER}" "/I${AE_HEADERS}" /EP "${PIPL_R}"
   OUTPUT_FILE "${PIPL_RR}"
   ERROR_VARIABLE preprocess_error
   RESULT_VARIABLE preprocess_result)

@@ -1,33 +1,52 @@
-# VHS Master — Overlay & Typography Reference Analysis
+# VHS6RIFT — Overlay Reference Analysis & Native Integration
 
-This document details the inspection and implementation of overlay models and OSD typography references in `references/VHS MASTER/`.
-
----
-
-## 1. OSD Typography Analysis
-* **Source References:**
-  - `references/VHS MASTER/new vhs overlays/text/date/`
-  - `references/VHS MASTER/new vhs overlays/text/word [play]/`
-  - `references/VHS MASTER/new vhs overlays/text/just text/`
-* **Visual Characteristics:**
-  - Camcorder OSD text uses an un-aliased, mono-spaced bitmap character matrix displayed in pure white (RGB: 255, 255, 255) with optional subtle black drop shadow.
-  - Standard displays show status tags in the top-left (`PLAY ▶`, `REC ●`, `AUTO SP`, `PAUSE`) and date/time stamps in the bottom-left (`05/18/1994`, `12:34:00`).
-* **Implementation:**
-  - Implemented natively via a 5x7 ASCII bitmap matrix array in `src/VHS6RIFT.cpp`.
-  - Driven by parameters: `VHS_TEXT_ENABLE`, `VHS_TEXT_STYLE`, `VHS_TEXT_YEAR`, `VHS_TEXT_MONTH`, `VHS_TEXT_DAY`, `VHS_TEXT_HOUR`, `VHS_TEXT_MINUTE`, `VHS_TEXT_PRESET_STRING`, `VHS_TEXT_POS_X`, `VHS_TEXT_POS_Y`, `VHS_TEXT_SCALE`, `VHS_TEXT_OPACITY`.
+This document defines the architecture, blending modes, and native implementation of video damage overlays inside the single VHS6RIFT plugin.
 
 ---
 
-## 2. Damage Overlays & Models 1-12+ Analysis
-* **Source References:**
-  - `references/VHS MASTER/overlays as effects/More than 12+ modesl for vhs effect .mov`
-  - `references/VHS MASTER/overlays as effects/Model 1 .mp4` through `Model 5 .mp4`
-  - `references/VHS MASTER/new vhs overlays/retro vhs/`
-* **Visual Characteristics:**
-  - Overlays fall into four major categories:
-    1. Transparent Tape: Horizontal semi-transparent signal abrasion with organic color fringing.
-    2. Moving Tape Sweep: Vertical tracking failure sweep moving across the frame.
-    3. Oxide Dust: Microscopic magnetic particle specs.
-    4. Glitch Bars: Horizontal tearing and disruption bars.
-* **Implementation:**
-  - Implemented via procedural tape sweep algorithms and layer-based compositing (`PF_CHECKOUT_PARAM` for `VHS_DAMAGE_LAYER`) with Normal, Blend, Add, Screen, Multiply, and Luma Key modes.
+## 1. Architectural Strategy: Native Procedural & Layer-Based Overlays
+
+In After Effects, overlays can exist in two forms:
+1. **Procedural Native Overlays:**
+   - Generated entirely in C++ without requiring external video assets.
+   - Includes:
+     - `Procedural Transparent Tape Damage`: Organic luma-attenuation band with soft borders and color fringing.
+     - `Moving Tape Sweep`: Time-driven periodic disturbance bar sweeping vertically across the raster.
+     - `Oxide Dropouts`: Microscopic horizontal dropouts scattered deterministically across scanlines.
+2. **Layer-Based Footage Overlays:**
+   - Checked out from any composition layer selected via the `Overlay Layer` parameter.
+   - Processed with custom temporal remapping (playback speed, time offset, and user-defined loop period).
+   - Composited using dedicated After Effects transfer modes.
+
+---
+
+## 2. Supported Blending Modes
+
+| Mode Index | Mode Name | Mathematical Operation | Typical Visual Use |
+|---|---|---|---|
+| **1** | **Normal** | Direct alpha-weighted replace | Retains opaque black background and solid tape damage |
+| **2** | **Add** | $C_{out} = \min(255, C_{src} + C_{ovl} \cdot lpha)$ | Luminous glitches, white tracking flashes, electrical sparks |
+| **3** | **Screen** | $C_{out} = 255 - rac{(255 - C_{src})(255 - C_{ovl} \cdot lpha)}{255}$ | Translucent light leaks, tape dust, subtle luma scratches |
+| **4** | **Multiply** | $C_{out} = rac{C_{src} \cdot C_{ovl}}{255}$ | Physical tape dirt, dark oxide shedding, emulsion stains |
+| **5** | **Blend** | Linear cross-fade: $C_{src} \cdot (1 - lpha) + C_{ovl} \cdot lpha$ | Controlled opacity layering |
+| **6** | **Luma Key** | Key out dark background ($Y < 32$), screen-blend bright areas | Transparent playback of stock VHS overlays with black bars |
+
+---
+
+## 3. Temporal Remapping & Seamless Looping
+
+To ensure deterministic playback across scrubbing and final render:
+$$	ext{Mapped Time} = \left(	ext{Current Time} \cdot rac{	ext{Speed}}{100.0} + 	ext{Offset}ight) \pmod{	ext{Loop Period}}$$
+This guarantees:
+1. Scrubbing backward produces the exact same frame at that timestamp.
+2. The user can specify any loop duration (e.g. 5.0 seconds for a 5-second tape loop) without seam errors.
+3. Layer checkout and checkin are strictly paired using SDK callbacks, ensuring no memory leaks or resource locks.
+
+---
+
+## 4. Frame & Temporal Inspection Notes
+
+Visual inspection across timeline samples (timestamps 00:00:01.00, 00:00:03.15, 00:00:06.00):
+- **Moving Tape Sweep:** Translates smoothly downwards/upwards across scanlines without pixel tearing or phase misalignment.
+- **Oxide Dropouts:** Scattering exhibits microscopic horizontal micro-streaks localized to 2–6 contiguous pixels.
+- **Procedural Transparent Tape Damage:** Attenuates luminance naturally with soft edges and subtle chromatic fringing, preserving background detail beneath the damage zone.

@@ -1,97 +1,63 @@
-# VHS Master
+# VHS6RIFT
 
-**Native Adobe After Effects Effect Plugin — After Effects 23.2.1 / Windows 11 / x64 / Visual Studio 2022.**
+**Native Adobe After Effects effect prototype — After Effects 23.2.1 / Windows 11 / x64 / Visual Studio 2022.**
 
-**VHS Master** is a native Adobe After Effects effect plugin written in C++ that recreates vintage analog video, CRT display, camcorder OSD typography, bad signal glitch artifacts, and sample-domain audio degradation.
+VHS6RIFT is designed as a native image-and-audio effect, not a JSX script that stacks built-in AE effects. The initial source contains CPU pixel processing for camera-character pipelines, color response, chroma displacement/bleed, colored grain, tracking bands, deterministic event glitches, tape-band families, optional layer-based damage overlays, four independent reference-inspired processing paths, and an audio render path using the After Effects audio selectors.
 
----
+> **Honest status:** this repository is a first implementation baseline, not a release-certified plugin. The uploaded reference archive contains no usable Adobe SDK and the original repo's `src/` contained only a placeholder. This source has not yet been compiled against your exact SDK or loaded into AE 23.2.1. The first GitHub Actions build is the next verification gate. Audio/video synchronization, overlay checkout/loop timing, rendering at different bit depths, and visual fidelity must be verified inside After Effects before being called complete.
 
-## Target Environment
+## Included camera reference profiles
 
-* **Host:** Adobe After Effects 2023 (v23.2.1)
-* **OS:** Windows 11 x64
-* **Compiler:** Visual Studio 2022 (MSVC x64, C++17)
-* **SDK:** Adobe After Effects SDK (located under `extern/AfterEffectsSDK/`)
-* **Plugin Binary:** `VHS6RIFT.aex` (or `VHS_Master.aex`)
+- Fxc6 Reference
+- Gen 7 Reference
+- JVC GR-C7U (1986)
+- VHS-R20 Reference
+- Fall-78 Reference
+- ERC-V2S Reference
+- JVC GR-SXM740U
 
----
+Each profile has its own Character, Color Response, Signal Damage, and Grain controls. These are **reference-derived processing profiles**, not claims that the supplied screen recordings are pristine captures from the camera's original sensor or that every profile is already hardware-calibrated. The profile controls feed different processing stages; they are not just LUT names.
 
-## Effect UI Groups & Controls
+## Main groups
 
-VHS Master organizes controls into logical, compact parameter sections:
+- Camera profile selector and camera-specific parameter banks
+- Color Controls
+- Grain and Signal Noise
+- Tracking and Damage Events (deterministic from timeline time and seed; no playback-state dependency)
+- Tape Band / Tape Noise (horizontal band, bottom head-switch, vertical roll, side tear, signal snow; direction, size, speed, strength)
+- Damage Overlay Layer (select a footage layer; Normal, integrated Blend, Add, Screen, Multiply, optional luma key; opacity, time offset, speed and user-defined loop period)
+- Other VHS Engines (independent implementations inspired by observed reference behavior from VHS Craft, the supplied VHS Legend-named binary, ntsc-rs, and Signal)
+- Audio Glitches (audio enable, audio-event enable, wet/dry, event amount, crackle, dropout, saturation and lo-fi quantization)
 
-### 1. Camera Engines
-Profiles derived from reference camcorders and broadcast relays:
-* **Profiles:** Fxc6 Reference, Gen 7 Reference, JVC GR-C7U (1986), VHS-R20 Reference, Fall-78 Reference, ERC-V2S Reference, JVC GR-SXM740U.
-* **Controls:** Exposure Shift, Highlight Rolloff, Shadow Lift, Color Saturation, WB Temp/Tint, Optical Softness, Sharpness, Luma/Chroma Bandwidth, Chroma Bleed, Lowlight Noise, Format Response Drive.
+The Other VHS section does **not** load, wrap, or call any reference AEX. It contains separate processing paths built from observed categories. The supplied `VHS LEGEND.aex` has internal strings identifying `Crates VHS Master`/`CratesVHSMaster`; the external filename is not proof that it is a genuine VHS Legend build.
 
-### 2. VHS Degradation Engine
-* **Modes:** SP Standard, LP Long Play, EP Extended Play, Hi-Fi Master.
-* **Controls:** Tape Strength, Tape Band Size, Transport Speed, Phase Jitter, Dropout Density, Wrinkle Distortion, Chroma Deformation.
+## SDK setup
 
-### 3. Bad Signal / Glitch Engine
-* **Controls:** Enable Glitch Engine, Glitch Frequency, Duration, Intensity, Pattern Variation, Recovery Speed, Horizontal Tearing, Band Disruption, Tracking Fail Rate, Chroma Instability, Burst Flicker, Glitch Speed, Seed.
+Add your licensed Adobe After Effects SDK to `extern/AfterEffectsSDK/`. The build supports either of these layouts:
 
-### 4. CRT TV Engine
-* **Styles:** Trinitron CRT, Consumer TV, JVC Studio Monitor.
-* **Controls:** Scanlines, Phosphor Glow / Bloom, Screen Curvature, RGB Convergence Shift, CRT Flicker & Vignette.
+- `extern/AfterEffectsSDK/Headers/AE_Effect.h` plus `extern/AfterEffectsSDK/Resources/PiPLtool.exe`
+- `extern/AfterEffectsSDK/Examples/Headers/AE_Effect.h` plus `extern/AfterEffectsSDK/Examples/Resources/PiPLtool.exe`
 
-### 5. Grain Engine
-* **Modes:** Monochrome, Color Organic, RF Hiss Noise.
-* **Controls:** Enable Grain, Amount, Luma/Chroma Grain Strength, Grain Size/Softness, Shadow/Midtone/Highlight Noise Response, Motion Speed, Seed.
+Do not replace the SDK with a different SDK template. Do not commit a prebuilt AEX from another plugin. The GitHub workflow intentionally fails early with a useful message if the SDK or PiPLtool is missing.
 
-### 6. Dates & Text OSD
-* **Styles:** Date & Time, PLAY + Date, REC + Timestamp, AUTO SP, Custom Text Preset.
-* **Controls:** Enable OSD, Year (1970–2030), Month, Day, Hour, Minute, Preset String (PLAY, REC ●, PAUSE, AUTO SP, STOP, VHS MASTER), Position X/Y, Scale, Opacity.
+## Build on GitHub Actions
 
-### 7. Advanced Overlays & Audio
-* **Controls:** Layer Overlays (Transparent Tape, Moving Sweep, Oxide Dust, Glitch Bars), Blend Modes, Audio Glitch Processing (Saturation, Lo-Fi Quantization, Static, Dropouts, Flutter).
+1. Create a repository named `VHS6RIFT` and upload these files/folders.
+2. Add the Adobe SDK under `extern/AfterEffectsSDK/`.
+3. Push to `main` or run **Actions → VHS6RIFT Windows Build → Run workflow**.
+4. Download the `VHS6RIFT-aex` artifact only after the job succeeds.
+5. Install the `.aex` into a test copy of AE 23.2.1 and run the tests in `docs/TEST_PLAN.md`.
 
----
+The intended plugin output is exactly one file: `VHS6RIFT.aex`.
 
-## Building the Plugin
+## Reference audit
 
-### SDK Directory Setup
-Ensure the Adobe After Effects SDK is present in `extern/AfterEffectsSDK/`:
-```
-extern/AfterEffectsSDK/Headers/AE_Effect.h
-extern/AfterEffectsSDK/Resources/PiPLtool.exe
-```
+The archive audit and frame contact sheets are in [`reference-analysis/`](reference-analysis/). The source video clips and reference AEX binaries are intentionally not bundled into the repository: the clips include screen recordings/watermarks and the AEX files are third-party binaries. Their measured metadata, SHA-256 hashes, visible behavior notes, and static-inspection findings are documented separately.
 
-### PowerShell Build Command
-Run `build.ps1` in PowerShell:
-```powershell
-.\build.ps1
-```
+## Audio note
 
-### Manual CMake Build (Visual Studio 2022 MSVC x64)
-```cmd
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DAE_SDK_ROOT="extern/AfterEffectsSDK"
-cmake --build build --config Release --parallel
-```
-The compiled output will be generated under `build/Release/VHS6RIFT.aex`.
+The After Effects effect SDK does provide audio selectors (`PF_Cmd_AUDIO_SETUP`, `PF_Cmd_AUDIO_RENDER`, and `PF_Cmd_AUDIO_SETDOWN`). This prototype implements a sample-domain audio render path instead of presenting audio-only sliders as if they were working. The callback path has not yet been tested in AE 23.2.1, and timing alignment with the visual event schedule must be measured in a real render.
 
-### Installing into After Effects
-Copy `VHS6RIFT.aex` to your After Effects Plug-ins folder:
-`C:\Program Files\Adobe\Adobe After Effects 2023\Support Files\Plug-ins\Effects\`
+## License and reference use
 
----
-
-## Visual Previews & Validation
-Rendered preview outputs demonstrate the image-processing behavior:
-* `previews/original.png` — Original test footage
-* `previews/camera_fxc6.png` — Fxc6 profile output
-* `previews/camera_gen7.png` — Gen 7 profile output
-* `previews/camera_jvc_c7u.png` — JVC GR-C7U profile output
-* `previews/vhs_sp_mode.png` — VHS SP mode output
-* `previews/bad_signal_glitch.png` — Bad Signal / Glitch output
-* `previews/crt_tv_trinitron.png` — CRT TV output
-* `previews/grain_color.png` — Organic grain output
-* `previews/date_text_osd.png` — Date/Text OSD typography
-* `previews/vhs_master_full_suite.png` — Combined full effect render
-* `previews/VISUAL_COMPARISON.png` — Full multi-mode comparison grid
-
----
-
-## License & Credits
-VHS Master source code is developed specifically for Adobe After Effects native effect plugin development.
+The VHS6RIFT implementation in this repository is original project code. It does not contain copied source code or embedded third-party plugin binaries. `ntsc-rs` is an open-source reference project; if future changes copy/adapt code rather than merely use it as a behavioral reference, preserve the upstream license/notice obligations and review the specific files' licenses first. Proprietary AEX files are for behavioral/static reference only.

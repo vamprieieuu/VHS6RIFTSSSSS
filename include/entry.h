@@ -2,9 +2,13 @@
 #ifndef _ENTRY_H
 #define _ENTRY_H
 
-#if defined(_MSC_VER)
+#if defined(MSWindows) || defined(_WIN32) || defined(WIN32) || defined(_WINDOWS) || defined(WIN_ENV)
 	#ifndef DllExport
 		#define DllExport   __declspec( dllexport )
+	#endif
+#elif defined(macintosh) || defined(__MACH__) || defined(__APPLE__)
+	#ifndef DllExport
+		#define DllExport   __attribute__((visibility("default")))
 	#endif
 #else
 	#ifndef DllExport
