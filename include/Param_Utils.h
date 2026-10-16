@@ -4,6 +4,7 @@
 
 #include "AE_Effect.h"
 #include "AE_Macros.h"
+#include "String_Utils.h"
 
 #define PF_ADD_SLIDER(NAME, MIN_VAL, MAX_VAL, SLD_MIN, SLD_MAX, DFLT, ID) \
 	do { \
@@ -47,7 +48,6 @@
 		PF_STRCPY(def.name, (NAME)); \
 		def.u.bd.u.nameptr = (STR_ON); \
 		def.u.bd.value = (DFLT); \
-		def.u.bd.dephault = (DFLT); \
 		def.flags = (FLAGS); \
 		def.uu.id = (ID); \
 		err = PF_ADD_PARAM(in_data, -1, &def); \
